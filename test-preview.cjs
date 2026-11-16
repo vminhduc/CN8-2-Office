@@ -1,0 +1,8 @@
+const assert=require('assert/strict'),{Readable}=require('stream'),{createPreviewServer}=require('./preview-server.cjs');
+(async()=>{const app=createPreviewServer();
+ async function request(method,url,data,token){const req=Readable.from(data===undefined?[]:[JSON.stringify(data)]);req.method=method;req.url=url;req.headers={host:'localhost:3000',...(token?{'x-office-token':token}:{})};let status,body;await app.listeners('request')[0](req,{writeHead(code){status=code},end(result){body=result}});let value;try{value=JSON.parse(body)}catch{}return {status,body,value}}
+ const info=await request('GET','/api/team');assert(info.value.health.preview);const token=info.value.token;
+ assert.equal((await request('GET','/')).status,200);assert.equal((await request('GET','/office-inbox.js')).status,200);assert.equal((await request('GET','/office.local.json')).status,404);assert.equal((await request('GET','/agent-runtime.cjs')).status,404);assert.equal((await request('GET','/api/dashboard')).value.source.classification,'demo');
+ const jobs=(await request('GET','/api/jobs')).value.jobs;assert(jobs.every(j=>j.preview&&j.request.includes('MẪU')));assert.equal((await request('POST','/api/jobs',{request:'Run actual work'},token)).status,409);assert.equal((await request('POST',`/api/jobs/${jobs[0].id}/done`,{done:true})).status,403);const saved=await request('POST',`/api/jobs/${jobs[0].id}/done`,{done:true},token);assert(saved.value.job.ownerClosedAt);assert.equal((await request('POST',`/api/jobs/${jobs[0].id}/done`,{done:false},token)).value.job.ownerClosedAt,null);
+ console.log('PASS preview assets, private-file exclusion, demo labels, no real AI execution, checkbox API and session validation.');
+})().catch(e=>{console.error(e);process.exit(1)});

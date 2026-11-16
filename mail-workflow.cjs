@@ -1,0 +1,38 @@
+const crypto=require('crypto');
+const config=require('./office-config.cjs');
+const rules={...require('./mail-workflow.json'),...Object.fromEntries(['projectRoot','downloadRoot','driveRootId','mailboxEmail','spmSenderAddresses','approvalSystemHosts'].map(key=>[key,config[key]]))};
+function normalized(s){return String(s||'').normalize('NFC').trim().replace(/\s+/gu,' ').toLowerCase()}
+function senderAddress(from){const s=String(from||'').trim();const match=s.match(/<([^<>\s]+@[^<>\s]+)>/);return (match?match[1]:s).toLowerCase()}
+function wordCount(text){return String(text||'').normalize('NFC').trim().split(/\s+/u).filter(w=>/[\p{L}\p{N}]/u.test(w)).length}
+function filterComments(comments){if(!Array.isArray(comments))throw Error('Chưa nhận được danh sách bình luận đầy đủ.');return comments.map(c=>{if(typeof c.text!=='string')throw Error('Bình luận chưa có nội dung gốc.');return {...c,wordCount:wordCount(c.text)}}).filter(c=>c.wordCount>10)}
+function classifyMail(mail,config=rules){if(!mail.id)throw Error('Thiếu ID thư để chống xử lý trùng.');const from=senderAddress(mail.from),subject=normalized(mail.subject),own=normalized(config.mailboxEmail);const spmSubjects=/\bapproval work (notification|notice)\b/u.test(subject)?'approval_work':/\bcase closing (notice|notification)\b/u.test(subject)?'case_closing':null;
+ if(spmSubjects){const confirmed=config.spmSenderAddresses.map(normalized).includes(from);const hint=normalized(mail.senderName||mail.from).includes('de.spm')||from.split('@')[0]==='de.spm';if(confirmed)return {branch:spmSubjects};if(hint)return {branch:spmSubjects,blocked:'Cần xác minh địa chỉ người gửi de.spm đầy đủ trước khi tự động mở hệ thống.'}}
+ if(/hồ sơ mới (vừa )?được trình/u.test(subject)){if(!own)return {branch:'new_submission',blocked:'Chưa xác nhận tài khoản Gmail của quản lý dự án.'};if(from===own)return {branch:'new_submission'}}
+ return {branch:'other_mail'};
+}
+function fingerprint(mail,branch,config=rules){if(!config.mailboxEmail)throw Error('Chưa có định danh tài khoản Gmail.');return crypto.createHash('sha256').update([config.mailboxEmail.toLowerCase(),mail.id,branch,mail.caseId||'',mail.revision||'',...(mail.attachments||[]).map(a=>a.sha256||'').sort()].join('\0')).digest('hex')}
+function approvedDocumentPlan(mail,config=rules){const evidence=mail.ownerApproval,policy=config.ownerApprovedDocument;if(!policy?.enabled||!evidence?.watermark?.verified)return null;
+ const mark=evidence.watermark,identity=normalized(evidence.reviewerName)===normalized(policy.reviewerName)&&evidence.documentIdentityVerified===true&&mark.page===1&&mark.position==='top_right'&&normalized(mark.text)==='cn8-2'&&typeof evidence.proofSource==='string'&&evidence.proofSource.trim();
+ if(!identity)return {status:'needs_owner',downloadRequired:false,reason:'Chưa xác nhận đúng dấu duyệt của Võ Minh Đức, hồ sơ hoặc phiên bản.'};
+ if(evidence.spmAlreadyHandled===true&&evidence.spmHistoryVerified===true)return {status:'already_handled',downloadRequired:false,action:'none',reason:'SPM đã ghi nhận Võ Minh Đức xử lý đúng hồ sơ/phiên bản; không gửi lại.',handledAt:evidence.handledAt};
+ const comment=evidence.comment;if(!comment?.text?.trim()||comment.section!=='Client Comment & Approval'||comment.page!==1||comment.belongsToReviewerVerified!==true)return {status:'needs_owner',downloadRequired:false,reason:'Chưa xác định được nguyên văn phần nhận xét của Đức; không lấy nhầm nhận xét tư vấn.'};
+ const sourceHash=crypto.createHash('sha256').update(comment.text).digest('hex'),translation=evidence.translation;
+ if(!translation?.text?.trim()||translation.sourceHash!==sourceHash||translation.verified!==true)return {status:'needs_translation',downloadRequired:false,sourceComment:comment.text,sourceHash,reason:'Cần dịch và kiểm tra bản tiếng Anh trước khi điền SPM.'};
+ if(evidence.spmHistoryVerified!==true||evidence.pendingForReviewerVerified!==true)return {status:'needs_system_read',downloadRequired:false,reason:'Cần xác nhận hồ sơ hiện còn chờ Đức xử lý và đọc lịch sử trước khi gửi.'};
+ return {status:'ready_for_approved_submission',downloadRequired:false,sourceComment:comment.text,sourceHash,englishComment:translation.text,actions:['fill_opinion','select_agree','send','verify_process_log'],submissionKey:crypto.createHash('sha256').update([mail.caseId,mail.revision||'',evidence.documentVersionKey||'',sourceHash,translation.text].join('\0')).digest('hex')};
+}
+function planMail(mail,config=rules){const route=classifyMail(mail,config);if(route.blocked)return {status:'blocked',...route};const branch=route.branch;const common={branch,messageId:mail.id,subject:mail.subject,from:mail.from,receivedAt:mail.receivedAt,sourceUrl:mail.url,sourceKey:fingerprint(mail,branch,config),reportTo:'duc'};
+ if(branch==='other_mail')return {...common,status:'ready_to_summarize',instruction:'Linh tổng hợp thư này vào bản tin email mới trong ngày: người gửi, tiêu đề, nội dung chính, việc Đức cần làm, hạn được nêu rõ và link thư. Không suy diễn thời hạn, không tự trả lời người gửi hoặc mở file/link không cần thiết.',evidence:mail};
+ if(!mail.caseId)return {...common,status:'needs_resolution',reason:'Chưa xác định được đúng mã hồ sơ/case từ nguồn.'};
+ if(branch==='approval_work'){const approved=approvedDocumentPlan(mail,config);if(approved)return {...common,...approved,authorization:'User instruction 2026-11-16: transfer Đức’s prior document approval and comments into SPM; no new technical approval by AI.'}}
+ if(branch==='case_closing'){
+  if(!mail.approvalHistoryExpanded||!mail.allCommentsLoaded)return {...common,status:'needs_system_read',reason:'Cần mở đầy đủ quy trình phê duyệt và bình luận.'};
+  const comments=filterComments(mail.comments);if(comments.some(c=>!c.author||!c.sourceUrl))return {...common,status:'blocked',reason:'Bình luận đạt tiêu chí còn thiếu tác giả hoặc link nguồn.'};
+  return {...common,status:'ready_for_review',comments,commentThreshold:'>10 words',instruction:`My kiểm tra bằng chứng quy trình của case ${mail.caseId}; Linh giữ nguyên ${comments.length} bình luận hơn 10 từ, ghi người, nguyên văn, số từ, thời điểm, bước và nguồn. Nếu không có bình luận đạt tiêu chí, báo rõ không có trong phần quy trình đã đọc đủ. Đăng kiểm tra trước khi trình Đức.`};
+ }
+ if(branch==='new_submission'&&(!mail.sheetRowVerified||!mail.driveRevisionVerified))return {...common,status:'needs_sheet_drive_match',reason:'Cần đối chiếu đúng dòng Sheet, mã hồ sơ và revision trong Drive.'};
+ const files=mail.attachments||[];if(!files.length||!mail.allAttachmentsDownloaded||files.some(f=>!f.localPath||!f.sha256||!f.verifiedSize))return {...common,status:'needs_download',reason:'Chưa tải và xác minh đủ file đính kèm của hồ sơ.'};
+ const root=config.downloadRoot.replaceAll('\\','/').toLowerCase().replace(/\/$/,'')+'/';if(files.some(f=>{const p=f.localPath.replaceAll('\\','/').toLowerCase();return !p.startsWith(root)||p.split('/').includes('..')}))return {...common,status:'blocked',reason:'File tải xuống không nằm đúng thư mục CHECK.'};
+ return {...common,status:'ready_for_review',attachments:files,instruction:`Workflow ${branch}: My xác minh danh mục và phiên bản hồ sơ ${mail.caseId}; Linh giao chuyên viên theo nội dung, Bách cho điện, nước, HVAC, PCCC và phối hợp MEPF; Tiến cho xây dựng, Hùng cho HSE, Thịnh cho khối lượng, Hòa cho hợp đồng/pháp lý. Kiểm tra kỹ với hồ sơ gốc tại ${config.projectRoot||'thư mục dự án đã cấu hình'}, ghi nguồn và các phần thiếu. Đăng kiểm duyệt rồi trình Đức; không tự trình duyệt, phê duyệt hoặc đăng ý kiến lên hệ thống.`};
+}
+module.exports={rules,wordCount,filterComments,classifyMail,fingerprint,planMail,approvedDocumentPlan};

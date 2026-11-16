@@ -1,0 +1,114 @@
+{
+  "id": "cn82-daily-mail-review",
+  "version": 1,
+  "name": "Linh kiểm tra email và hồ sơ hằng ngày",
+  "schedule": {
+    "hour": 21,
+    "minute": 0,
+    "timezone": "Asia/Ho_Chi_Minh",
+    "days": "every_day"
+  },
+  "status": "paused_not_configured",
+  "projectRoot": "",
+  "downloadRoot": "",
+  "driveRootId": "",
+  "mailboxEmail": "",
+  "spmSenderAddresses": [],
+  "approvalSystemHosts": [],
+  "commentRule": {
+    "unit": "words",
+    "operator": "greater_than",
+    "threshold": 10
+  },
+  "ownerApprovedDocument": {
+    "enabled": true,
+    "authorizedByUserOn": "2026-11-16",
+    "reviewerName": "Võ Minh Đức",
+    "role": "Quản lý dự án",
+    "previewFirst": true,
+    "watermark": {
+      "text": "CN8-2",
+      "page": 1,
+      "position": "top_right",
+      "visualVerificationRequired": true
+    },
+    "commentSection": "Client Comment & Approval",
+    "downloadToCheck": false,
+    "actions": [
+      "Đối chiếu đúng hồ sơ và phiên bản",
+      "Xác nhận dấu CN8-2 ở góc phải trang đầu và phần nhận xét gắn với Võ Minh Đức",
+      "Kiểm tra lịch sử SPM để tránh gửi trùng",
+      "Lấy đúng nhận xét của Đức, không gộp nhận xét tư vấn",
+      "Dịch sang tiếng Anh, giữ nguyên ý, con số, đơn vị, điều kiện và mức độ yêu cầu",
+      "Điền ô ý kiến, chọn Đồng ý, bấm Gửi",
+      "Kiểm tra lịch sử SPM đã ghi đúng người, nội dung và trạng thái rồi mới ghi nhận thành công"
+    ],
+    "onAmbiguity": "needs_owner",
+    "onAlreadyHandled": "skip_without_resubmit",
+    "onUncertainSubmission": "do_not_retry_until_process_log_checked"
+  },
+  "branches": [
+    {
+      "id": "new_submission",
+      "sender": "authenticated_mailbox_owner",
+      "subjectContains": "Hồ sơ mới được trình",
+      "steps": [
+        "Đọc thư gốc",
+        "Mở link Sheet và tìm đúng mã hồ sơ, revision",
+        "Đối chiếu hồ sơ tại Drive gốc",
+        "Tải đủ hồ sơ về CHECK, kiểm tra file và lập manifest",
+        "Linh phân công My và chuyên viên phù hợp, ưu tiên Bách cho MEPF",
+        "Đăng kiểm duyệt và trình Đức"
+      ]
+    },
+    {
+      "id": "approval_work",
+      "sender": "verified_de.spm_address",
+      "subjectContains": "Approval work notification",
+      "steps": [
+        "Đọc thư gốc và nhận diện hệ thống từ link",
+        "Mở đúng case được nêu",
+        "Tải các file đính kèm của case về CHECK và lập manifest",
+        "Linh phân công kiểm tra, góp ý; Bách phụ trách MEPF",
+        "Đăng kiểm duyệt và trình Đức; không tự gửi comment lên hệ thống"
+      ]
+    },
+    {
+      "id": "case_closing",
+      "sender": "verified_de.spm_address",
+      "subjectContains": "Case Closing Notice",
+      "steps": [
+        "Mở đúng case theo link thư",
+        "Cuộn tới và mở quy trình phê duyệt",
+        "Mở đủ các bước, bình luận và các trang danh sách nếu có",
+        "Lọc riêng từng bình luận hơn 10 từ",
+        "Ghi nguyên văn người bình luận, nội dung, số từ, thời điểm, bước, mã case và link nguồn",
+        "My kiểm tra nguồn, Đăng rà soát và trình Đức"
+      ]
+    },
+    {
+      "id": "other_mail",
+      "sender": "any_other_sender",
+      "steps": [
+        "Đọc các thư mới còn lại",
+        "Tóm tắt người gửi, tiêu đề, nội dung, việc cần Đức xử lý và hạn nếu có",
+        "Gom thành bản tin email trong ngày, dẫn link về từng thư",
+        "Đăng kiểm tra độ đủ, Linh trình tại bàn Đức"
+      ]
+    }
+  ],
+  "reliability": {
+    "dedupe": "mailbox + messageId + branch + caseId + revision + attachment hashes",
+    "markReadIsNotProcessed": true,
+    "onlyMarkCompleteAfterReport": true,
+    "ambiguousMatch": "ask_owner",
+    "downloadPartial": "blocked",
+    "interrupted": "needs_check_before_retry",
+    "firstRun": "record_start_boundary_then_test_one_selected_message"
+  },
+  "blockers": [
+    "Chưa xác định chắc chắn liên kết Report/80 với đúng revision PDF",
+    "Chưa rà soát toàn bộ kỹ thuật các hồ sơ dài",
+    "Chưa có case mới chưa gửi để thử nhánh chuyển nhận xét đã duyệt; lịch vẫn tạm dừng"
+  ]
+}
