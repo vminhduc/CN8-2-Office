@@ -1,0 +1,290 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Reusable Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedOwner() {
+      return isVerifiedEmail() && request.auth.token.email == 'minhduc@pmh.com.vn';
+    }
+
+    // Only Duc (minhduc@pmh.com.vn) has access-granting / invite administration capability
+    function isAccessAdmin() {
+      return isBootstrappedOwner();
+    }
+
+    function isProjectMember() {
+      return isVerifiedEmail() && (
+        isBootstrappedOwner() ||
+        (
+          exists(/databases/$(database)/documents/members/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.active == true
+        )
+      );
+    }
+
+    function isProjectOwner() {
+      return isVerifiedEmail() && (
+        isBootstrappedOwner() ||
+        (
+          exists(/databases/$(database)/documents/members/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.active == true &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role == 'owner'
+        )
+      );
+    }
+
+    function canWriteMember() {
+      return isVerifiedEmail() && (
+        isBootstrappedOwner() ||
+        (
+          exists(/databases/$(database)/documents/members/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.active == true &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role in ['owner', 'member']
+        )
+      );
+    }
+
+    function hasAllowedUid() {
+      return isVerifiedEmail() && (
+        isBootstrappedOwner() ||
+        ('allowedUids' in existing() && existing().allowedUids is list && existing().allowedUids.size() <= 100 && request.auth.uid in existing().allowedUids)
+      );
+    }
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'nameSetAt', 'role', 'roleTitle', 'active', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && (!('nameSetAt' in data) || data.nameSetAt == null || (data.nameSetAt is string && data.nameSetAt.size() <= 64))
+        && data.role in ['owner', 'member', 'viewer']
+        && (!('roleTitle' in data) || data.roleTitle == null || (data.roleTitle is string && data.roleTitle.size() <= 120))
+        && data.active is bool
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidInvite(data) {
+      return data.keys().hasAll(['id', 'email', 'role', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'email', 'displayName', 'role', 'roleTitle', 'active', 'createdByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && data.role in ['owner', 'member', 'viewer']
+        && (!('roleTitle' in data) || data.roleTitle == null || (data.roleTitle is string && data.roleTitle.size() <= 120))
+        && data.active is bool
+        && (!('createdByUid' in data) || data.createdByUid == null || isValidId(data.createdByUid))
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidMemberReport(data) {
+      return data.keys().hasAll(['id', 'recipientEmail', 'recipientName', 'title', 'content', 'sentByUid', 'allowedUids', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'recipientEmail', 'recipientName', 'title', 'content',
+          'sourceJobId', 'sentByUid', 'sentByEmail', 'sentByName',
+          'acknowledgedAt', 'allowedUids', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.recipientEmail is string && data.recipientEmail.size() >= 3 && data.recipientEmail.size() <= 254
+        && data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 120
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 500
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 60000
+        && (!('sourceJobId' in data) || data.sourceJobId == null || isValidId(data.sourceJobId))
+        && isValidId(data.sentByUid)
+        && (!('sentByEmail' in data) || (data.sentByEmail is string && data.sentByEmail.size() <= 254))
+        && (!('sentByName' in data) || (data.sentByName is string && data.sentByName.size() <= 120))
+        && (!('acknowledgedAt' in data) || data.acknowledgedAt == null || (data.acknowledgedAt is string && data.acknowledgedAt.size() <= 64))
+        && data.allowedUids is list && data.allowedUids.size() >= 1 && data.allowedUids.size() <= 100 && data.allowedUids[0] is string
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasAll(['id', 'request', 'targetAgent', 'reportTo', 'status', 'allowedUids', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'request', 'targetAgent', 'reportTo', 'sourceKey', 'status',
+          'currentAgent', 'currentStepType', 'reviewRound', 'planSummary', 'result',
+          'error', 'questions', 'clarifications', 'allowedUids', 'createdByUid',
+          'createdByEmail', 'createdByRole', 'createdByName', 'assignedByUid',
+          'assignedAt', 'ownerNote', 'ownerClosedAt', 'ownerClosedBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.request is string && data.request.size() >= 1 && data.request.size() <= 12000
+        && data.targetAgent in ['linh', 'hung', 'thinh', 'tien', 'hoa', 'my', 'dang', 'bach']
+        && data.reportTo == 'duc'
+        && (!('sourceKey' in data) || data.sourceKey == null || (data.sourceKey is string && data.sourceKey.size() <= 256))
+        && data.status in ['queued', 'running', 'planning', 'working', 'reviewing', 'waiting_input', 'waiting_device', 'waiting_owner_assignment', 'needs_review', 'needs_check', 'needs_owner', 'completed', 'failed', 'interrupted']
+        && (!('currentAgent' in data) || data.currentAgent == null || (data.currentAgent is string && data.currentAgent.size() <= 64))
+        && (!('currentStepType' in data) || data.currentStepType == null || (data.currentStepType is string && data.currentStepType.size() <= 64))
+        && (!('reviewRound' in data) || (data.reviewRound is int && data.reviewRound >= 0 && data.reviewRound <= 10))
+        && (!('planSummary' in data) || data.planSummary == null || (data.planSummary is string && data.planSummary.size() <= 4000))
+        && (!('result' in data) || (data.result is string && data.result.size() <= 120000))
+        && (!('error' in data) || data.error == null || (data.error is string && data.error.size() <= 4000))
+        && (!('questions' in data) || (data.questions is list && data.questions.size() <= 20 && (data.questions.size() == 0 || data.questions[0] is string)))
+        && (!('clarifications' in data) || (data.clarifications is list && data.clarifications.size() <= 30 && (data.clarifications.size() == 0 || data.clarifications[0] is string)))
+        && data.allowedUids is list && data.allowedUids.size() >= 1 && data.allowedUids.size() <= 100 && data.allowedUids[0] is string
+        && isValidId(data.createdByUid)
+        && (!('createdByEmail' in data) || (data.createdByEmail is string && data.createdByEmail.size() <= 254))
+        && (!('createdByRole' in data) || data.createdByRole in ['owner', 'member', 'viewer'])
+        && (!('createdByName' in data) || (data.createdByName is string && data.createdByName.size() <= 120))
+        && (!('assignedByUid' in data) || data.assignedByUid == null || isValidId(data.assignedByUid))
+        && (!('assignedAt' in data) || data.assignedAt == null || (data.assignedAt is string && data.assignedAt.size() <= 64))
+        && (!('ownerNote' in data) || data.ownerNote == null || (data.ownerNote is string && data.ownerNote.size() <= 4000))
+        && (!('ownerClosedAt' in data) || data.ownerClosedAt == null || (data.ownerClosedAt is string && data.ownerClosedAt.size() <= 64))
+        && (!('ownerClosedBy' in data) || data.ownerClosedBy == null || (data.ownerClosedBy is string && data.ownerClosedBy.size() <= 128))
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidWorkflow(data) {
+      return data.keys().hasAll(['id', 'enabled', 'testedAndConfirmed', 'scheduleHour', 'scheduleMinute', 'timezone', 'allowedUids', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'enabled', 'testedAndConfirmed', 'scheduleHour', 'scheduleMinute', 'timezone', 'startBoundaryAt', 'lastRunAt', 'lastRunStatus', 'allowedUids', 'updatedAt'])
+        && isValidId(data.id)
+        && data.enabled is bool
+        && data.testedAndConfirmed is bool
+        && data.scheduleHour is int && data.scheduleHour >= 0 && data.scheduleHour <= 23
+        && data.scheduleMinute is int && data.scheduleMinute >= 0 && data.scheduleMinute <= 59
+        && data.timezone is string && data.timezone.size() <= 64
+        && (!('startBoundaryAt' in data) || data.startBoundaryAt == null || (data.startBoundaryAt is string && data.startBoundaryAt.size() <= 64))
+        && (!('lastRunAt' in data) || data.lastRunAt == null || (data.lastRunAt is string && data.lastRunAt.size() <= 64))
+        && (!('lastRunStatus' in data) || data.lastRunStatus == null || (data.lastRunStatus is string && data.lastRunStatus.size() <= 64))
+        && data.allowedUids is list && data.allowedUids.size() >= 1 && data.allowedUids.size() <= 100 && data.allowedUids[0] is string
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    // 3. Startup Connection Check (getDocFromServer)
+    match /test/{docId} {
+      allow get: if isValidId(docId) && isVerifiedEmail();
+      allow list, write: if false;
+    }
+
+    // 4. Project Members (PII-isolated; ONLY Duc manages allowlist & role assignments)
+    match /members/{uid} {
+      allow get: if isValidId(uid) && isVerifiedEmail() && (request.auth.uid == uid || isAccessAdmin());
+      allow list: if isAccessAdmin();
+      allow create: if isValidId(uid) && isAccessAdmin() && isValidMember(incoming()) && incoming().uid == uid;
+      allow update: if isValidId(uid)
+        && isValidMember(incoming())
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && (
+          (isAccessAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'nameSetAt', 'role', 'roleTitle', 'active', 'updatedAt'])) ||
+          (isProjectMember() && request.auth.uid == uid && incoming().role == existing().role && incoming().active == existing().active && (!('roleTitle' in existing()) || incoming().roleTitle == existing().roleTitle) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'nameSetAt', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    // 4b. Pre-Authorized Email Invites (ONLY Duc creates/updates; signed-in user may get own invite)
+    match /invites/{inviteId} {
+      allow get: if isValidId(inviteId) && (isAccessAdmin() || (isVerifiedEmail() && existing().email == request.auth.token.email));
+      allow list: if isAccessAdmin();
+      allow create, update: if isValidId(inviteId) && isAccessAdmin() && isValidInvite(incoming()) && incoming().id == inviteId;
+      allow delete: if false;
+    }
+
+    // 4c. Reports Sent by Owner to Member Desks (e.g., Nghia)
+    match /memberReports/{reportId} {
+      allow get: if isValidId(reportId) && (isProjectOwner() || (isProjectMember() && existing().recipientEmail == request.auth.token.email));
+      allow list: if hasAllowedUid();
+      allow create: if isValidId(reportId) && isProjectOwner() && isValidMemberReport(incoming()) && incoming().id == reportId;
+      allow update: if isValidId(reportId)
+        && isValidMemberReport(incoming())
+        && incoming().id == existing().id
+        && incoming().recipientEmail == existing().recipientEmail
+        && incoming().sentByUid == existing().sentByUid
+        && incoming().createdAt == existing().createdAt
+        && (
+          isProjectOwner() ||
+          (isProjectMember() && existing().recipientEmail == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['acknowledgedAt', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    // 5. Orchestration Jobs (Validated writes for project members/owner; Admin SDK bypasses for worker sync)
+    match /jobs/{jobId} {
+      allow get: if isValidId(jobId) && isProjectMember();
+      allow list: if hasAllowedUid();
+      allow create: if isValidId(jobId)
+        && canWriteMember()
+        && isValidJob(incoming())
+        && incoming().id == jobId
+        && incoming().createdByUid == request.auth.uid
+        && request.auth.uid in incoming().allowedUids
+        && incoming().status in ['queued', 'waiting_device', 'waiting_owner_assignment']
+        && !('ownerClosedAt' in incoming() && incoming().ownerClosedAt != null);
+      allow update: if isValidId(jobId)
+        && canWriteMember()
+        && isValidJob(incoming())
+        && incoming().id == existing().id
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && (
+          // Action 1: Owner closing or reopening a report
+          (isProjectOwner() && incoming().diff(existing()).affectedKeys().hasOnly(['ownerClosedAt', 'ownerClosedBy', 'updatedAt'])) ||
+          // Action 2: Answering waiting_input or retrying failed/interrupted job
+          (existing().status in ['waiting_input', 'failed', 'interrupted'] && incoming().status in ['queued', 'waiting_device'] && incoming().diff(existing()).affectedKeys().hasOnly(['clarifications', 'status', 'error', 'result', 'updatedAt'])) ||
+          // Action 3: Owner / backend synchronization update
+          isProjectOwner()
+        );
+      allow delete: if false;
+
+      match /events/{eventId} {
+        allow get: if isValidId(jobId) && isValidId(eventId) && isProjectMember();
+        allow list: if hasAllowedUid();
+        allow write: if false;
+      }
+    }
+
+    // 6. Site Worker Devices (Members read; owner registers/revokes)
+    match /devices/{deviceId} {
+      allow get: if isValidId(deviceId) && isProjectMember();
+      allow list: if hasAllowedUid();
+      allow write: if isValidId(deviceId) && isProjectOwner();
+    }
+
+    // 7. Workflow Schedule State (Members read; owner activates/pauses after confirmed test)
+    match /workflows/{workflowId} {
+      allow get: if isValidId(workflowId) && isProjectMember();
+      allow list: if hasAllowedUid();
+      allow create, update: if isValidId(workflowId) && isProjectOwner() && isValidWorkflow(incoming()) && incoming().id == workflowId;
+      allow delete: if false;
+    }
+
+    // 8. Server-Only Queues & Dedupe Stores
+    match /tasks/{taskId} {
+      allow read, write: if false;
+    }
+
+    match /mailItems/{sourceKey} {
+      allow read, write: if false;
+    }
+  }
+}

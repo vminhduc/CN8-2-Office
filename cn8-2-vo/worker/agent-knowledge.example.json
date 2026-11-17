@@ -1,0 +1,22 @@
+{
+  "agents": {
+    "hoa": {
+      "resources": [
+        {
+          "title": "TCVN_CIVIL",
+          "category": "Tiêu chuẩn xây dựng",
+          "url": "https://notebooklm.google.com/notebook/REPLACE_WITH_PRIVATE_TCVN_NOTEBOOK_ID"
+        },
+        {
+          "title": "CN8-2 Contract (Book 1 2 3)",
+          "category": "Hợp đồng dự án",
+          "url": "https://notebooklm.google.com/notebook/REPLACE_WITH_PRIVATE_CONTRACT_NOTEBOOK_ID"
+        }
+      ],
+      "rules": [
+        "Chỉ dùng làm dữ liệu tham chiếu tiêu chuẩn và hợp đồng CN8-2.",
+        "Ghi rõ tên tài liệu, chương/điều khoản hoặc TCVN đã thực sự đọc."
+      ]
+    }
+  }
+}

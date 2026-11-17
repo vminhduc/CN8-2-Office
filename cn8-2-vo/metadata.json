@@ -1,0 +1,6 @@
+{
+  "name": "CN8-2 Office",
+  "description": "Văn phòng 3D tương tác CN8-2: theo dõi tiến độ dự án, điều phối đội ngũ 8 trợ lý AI và quản lý hộp báo cáo tại bàn quản lý dự án.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

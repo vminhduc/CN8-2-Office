@@ -1,0 +1,12 @@
+{
+  "serverUrl": "https://your-cn82-office-cloud-url",
+  "deviceId": "site-pc-cn82-01",
+  "label": "May Cong Truong CN8-2",
+  "workerToken": "PASTE_WORKER_TOKEN_FROM_REGISTER_API",
+  "codexPath": "",
+  "projectRoot": "D:\\CN8-2",
+  "libraryRoot": "D:\\CN8-2-Library",
+  "downloadRoot": "C:\\Users\\YOUR_USER\\Downloads\\CHECK",
+  "pollIntervalMs": 5000,
+  "heartbeatIntervalMs": 15000
+}

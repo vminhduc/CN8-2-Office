@@ -1,0 +1,243 @@
+{
+  "entities": {
+    "ProjectMember": {
+      "title": "ProjectMember",
+      "description": "Authorized CN8-2 project member allowed to access the 3D office and workflow state.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "nameSetAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "role": { "type": "string", "enum": ["owner", "member", "viewer"] },
+        "roleTitle": { "type": "string", "maxLength": 120 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "role", "active", "createdAt", "updatedAt"]
+    },
+    "MemberInvite": {
+      "title": "MemberInvite",
+      "description": "Email-based project member pre-authorization / allowlist managed exclusively by Duc (minhduc@pmh.com.vn).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["owner", "member", "viewer"] },
+        "roleTitle": { "type": "string", "maxLength": 120 },
+        "active": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "email", "role", "active", "createdAt", "updatedAt"]
+    },
+    "MemberReport": {
+      "title": "MemberReport",
+      "description": "Reports sent by the project manager (Duc) directly to a member desk (e.g. Nghia).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "recipientEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "recipientName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 60000 },
+        "sourceJobId": { "type": "string", "maxLength": 128 },
+        "sentByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sentByEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "sentByName": { "type": "string", "maxLength": 120 },
+        "acknowledgedAt": { "type": "string", "maxLength": 64 },
+        "allowedUids": { "type": "array", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "recipientEmail", "title", "content", "sentByUid", "allowedUids", "createdAt", "updatedAt"]
+    },
+    "OfficeJob": {
+      "title": "OfficeJob",
+      "description": "Persistent CN8-2 orchestration job coordinated by Linh, executed by specialist agents on the Windows worker, reviewed by Đăng, and presented to Đức.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "request": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "targetAgent": {
+          "type": "string",
+          "enum": ["linh", "hung", "thinh", "tien", "hoa", "my", "dang", "bach"]
+        },
+        "reportTo": { "type": "string", "enum": ["duc"] },
+        "sourceKey": { "type": "string", "maxLength": 256 },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "planning",
+            "working",
+            "reviewing",
+            "waiting_input",
+            "waiting_device",
+            "waiting_owner_assignment",
+            "needs_review",
+            "needs_check",
+            "needs_owner",
+            "completed",
+            "failed",
+            "interrupted"
+          ]
+        },
+        "currentAgent": { "type": "string", "maxLength": 64 },
+        "currentStepType": { "type": "string", "maxLength": 64 },
+        "reviewRound": { "type": "integer" },
+        "planSummary": { "type": "string", "maxLength": 4000 },
+        "result": { "type": "string", "maxLength": 120000 },
+        "error": { "type": "string", "maxLength": 4000 },
+        "questions": { "type": "array", "maxLength": 20 },
+        "clarifications": { "type": "array", "maxLength": 30 },
+        "allowedUids": { "type": "array", "maxLength": 100 },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdByEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "createdByRole": { "type": "string", "enum": ["owner", "member", "viewer"] },
+        "createdByName": { "type": "string", "maxLength": 120 },
+        "assignedByUid": { "type": "string", "maxLength": 128 },
+        "assignedAt": { "type": "string", "maxLength": 64 },
+        "ownerNote": { "type": "string", "maxLength": 4000 },
+        "ownerClosedAt": { "type": "string", "maxLength": 64 },
+        "ownerClosedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "request", "targetAgent", "reportTo", "status", "allowedUids", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "JobTask": {
+      "title": "JobTask",
+      "description": "Idempotent execution step dispatched to the Windows Codex bridge worker with lease locking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "jobId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "codex_plan",
+            "codex_specialist",
+            "codex_review",
+            "codex_revise",
+            "mail_scan",
+            "sheet_lookup",
+            "drive_download",
+            "spm_inspect",
+            "spm_transfer_approved"
+          ]
+        },
+        "agentId": { "type": "string", "maxLength": 64 },
+        "model": { "type": "string", "maxLength": 64 },
+        "reasoning": { "type": "string", "maxLength": 32 },
+        "serviceTier": { "type": "string", "maxLength": 32 },
+        "idempotencyKey": { "type": "string", "maxLength": 256 },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "leased", "completed", "needs_check", "waiting_user_unlock", "failed"]
+        },
+        "leaseDeviceId": { "type": "string", "maxLength": 128 },
+        "leaseExpiresAt": { "type": "string", "maxLength": 64 },
+        "attempt": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "jobId", "kind", "idempotencyKey", "status", "createdAt", "updatedAt"]
+    },
+    "WorkerDevice": {
+      "title": "WorkerDevice",
+      "description": "Registered Windows site PC bridge worker identity, heartbeat, capabilities, and revocation state.",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["online", "busy", "locked", "offline", "revoked"] },
+        "revoked": { "type": "boolean" },
+        "codexAvailable": { "type": "boolean" },
+        "desktopUnlocked": { "type": "boolean" },
+        "allowedUids": { "type": "array", "maxLength": 100 },
+        "lastHeartbeatAt": { "type": "string", "maxLength": 64 },
+        "activeTaskId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["deviceId", "label", "status", "revoked", "allowedUids", "createdAt", "updatedAt"]
+    },
+    "WorkflowState": {
+      "title": "WorkflowState",
+      "description": "Non-secret workflow & 21:00 Asia/Ho_Chi_Minh schedule configuration and start boundary.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "enabled": { "type": "boolean" },
+        "testedAndConfirmed": { "type": "boolean" },
+        "scheduleHour": { "type": "integer" },
+        "scheduleMinute": { "type": "integer" },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "startBoundaryAt": { "type": "string", "maxLength": 64 },
+        "lastRunAt": { "type": "string", "maxLength": 64 },
+        "lastRunStatus": { "type": "string", "maxLength": 64 },
+        "allowedUids": { "type": "array", "maxLength": 100 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "enabled", "testedAndConfirmed", "scheduleHour", "scheduleMinute", "timezone", "allowedUids", "updatedAt"]
+    },
+    "MailItemRecord": {
+      "title": "MailItemRecord",
+      "description": "Per-messageId deduplication & evidence record for the 21:00 daily mail workflow.",
+      "type": "object",
+      "properties": {
+        "sourceKey": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "messageId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "branch": {
+          "type": "string",
+          "enum": ["new_submission", "approval_work", "case_closing", "other_mail"]
+        },
+        "status": { "type": "string", "maxLength": 64 },
+        "caseId": { "type": "string", "maxLength": 128 },
+        "revision": { "type": "string", "maxLength": 64 },
+        "jobId": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["sourceKey", "messageId", "branch", "status", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/members/{uid}": {
+      "schema": { "$ref": "#/entities/ProjectMember" },
+      "description": "Allowlisted project members and roles (owner/member/viewer)."
+    },
+    "/invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/MemberInvite" },
+      "description": "Email-based project allowlist / pre-authorized invites managed by owner."
+    },
+    "/memberReports/{reportId}": {
+      "schema": { "$ref": "#/entities/MemberReport" },
+      "description": "Reports sent by the project owner to member workstations (such as Nghia)."
+    },
+    "/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/OfficeJob" },
+      "description": "Persistent orchestration jobs, results, review rounds, and owner closure state."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/JobTask" },
+      "description": "Worker lease queue for Windows Codex bridge execution."
+    },
+    "/devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/WorkerDevice" },
+      "description": "Registered site PC worker devices, heartbeats, and revocation status."
+    },
+    "/workflows/{workflowId}": {
+      "schema": { "$ref": "#/entities/WorkflowState" },
+      "description": "21:00 daily mail workflow schedule configuration and lock state."
+    },
+    "/mailItems/{sourceKey}": {
+      "schema": { "$ref": "#/entities/MailItemRecord" },
+      "description": "Message-level dedupe and SPM submission verification state."
+    }
+  }
+}
